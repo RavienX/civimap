@@ -3,32 +3,40 @@ import { createClient } from "@supabase/supabase-js";
 
 // ── Supabase Client ─────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://afvhvhnzmrcykpqlmqnr.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_b5qxLBFPNW64wwYfCuoalA_oAUo3Viu"; // replace with your sb_publishable_... key
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_b5qxLBFPNW64wwYfCuoalA_oAUo3Viu";
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
 const GOOGLE_MAPS_API_KEY = "AIzaSyAd2kPUWd-cMhs2r4ScEFZDtHuvGQgSZbY";
 
-// ── Palette — modern civic tech ────────────────────────────────────────
+// ── Palette — modern light civic theme ─────────────────────────────────
 const COLORS = {
-  bg: "#f1f5f9",
+  bg: "#f0f4fa",
   surface: "#ffffff",
-  surfaceHigh: "#f8fafc",
-  surfaceMid: "#e8eef6",
-  border: "#e2e8f0",
-  accent: "#1d4ed8",
+  surfaceHigh: "#f7f9fd",
+  surfaceMid: "#e8eef8",
+  border: "#dde5f0",
+  accent: "#2563eb",
   accentLight: "#3b82f6",
-  accentGlow: "rgba(29,78,216,0.15)",
+  accentGlow: "rgba(37,99,235,0.18)",
+  accentSoft: "#eff4ff",
   danger: "#dc2626",
+  dangerSoft: "#fef2f2",
   warning: "#d97706",
+  warningSoft: "#fffbeb",
   success: "#059669",
+  successSoft: "#ecfdf5",
   text: "#0f172a",
   textMuted: "#64748b",
-  textDim: "#475569",
+  textDim: "#334155",
   pin: { high: "#dc2626", medium: "#d97706", low: "#059669" },
 };
 
 const LICAB_CENTER = { lat: 15.6394, lng: 120.8064 };
-const LICAB_BOUNDS = { minLat: 15.59, maxLat: 15.69, minLng: 120.76, maxLng: 120.85 };
+// Tight bounds: barangays around Licab only, excludes clicking on the town center label area
+const LICAB_BOUNDS = { minLat: 15.605, maxLat: 15.685, minLng: 120.768, maxLng: 120.848 };
+
+// Map zoom — zoomed in so only Licab is visible
+const LICAB_ZOOM = 14;
 
 const INFRA_TYPES = ["Road", "Bridge", "Public Building"];
 const CHECKLIST = {
@@ -72,21 +80,12 @@ const severityIcon = (s) => (s === "High" ? "🔴" : s === "Medium" ? "🟡" : "
 const typeIcon = (t) => (t === "Road" ? "🛣️" : t === "Bridge" ? "🌉" : "🏛️");
 
 const groupReports = (reports) => {
-  const groups = [];
-  reports.forEach((r) => {
-    const existing = groups.find(
-      (g) => Math.abs(g.lat - r.lat) < 0.003 && Math.abs(g.lng - r.lng) < 0.003
-    );
-    if (existing) {
-      existing.reports.push(r);
-      if (getSeverity(r.score) === "High") existing.topSeverity = "High";
-      else if (getSeverity(r.score) === "Medium" && existing.topSeverity !== "High")
-        existing.topSeverity = "Medium";
-    } else {
-      groups.push({ lat: r.lat, lng: r.lng, topSeverity: getSeverity(r.score), reports: [r] });
-    }
-  });
-  return groups;
+  return reports.map((r) => ({
+    lat: r.lat,
+    lng: r.lng,
+    topSeverity: getSeverity(r.score),
+    reports: [r],
+  }));
 };
 
 // Light map styles
@@ -113,7 +112,7 @@ const LIGHT_MAP_STYLES = [
 
 const loadGoogleMaps = (apiKey) => {
   return new Promise((resolve, reject) => {
-    if (window.google && window.google.maps) { resolve(window.google.maps); return; }
+    if (window.google?.maps) { resolve(window.google.maps); return; }
     const existing = document.getElementById("google-maps-script");
     if (existing) {
       existing.addEventListener("load", () => resolve(window.google.maps));
@@ -139,8 +138,8 @@ function ReportPanel({ group, onClose, isMobile }) {
     <aside style={getPanelWrapStyle(isMobile)}>
       <div style={panelStyles.header}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ width: 9, height: 9, borderRadius: "50%", background: severityColor(group.topSeverity), boxShadow: `0 0 8px ${severityColor(group.topSeverity)}88` }} />
-          <span style={{ fontWeight: 700, fontSize: 12, letterSpacing: 1.2, color: COLORS.textMuted, textTransform: "uppercase" }}>
+          <div style={{ width: 10, height: 10, borderRadius: "50%", background: severityColor(group.topSeverity), boxShadow: `0 0 10px ${severityColor(group.topSeverity)}99` }} />
+          <span style={{ fontWeight: 800, fontSize: 13, letterSpacing: 0.8, color: COLORS.text }}>
             {sorted.length} Report{sorted.length > 1 ? "s" : ""} at Location
           </span>
         </div>
@@ -157,28 +156,70 @@ function ReportPanel({ group, onClose, isMobile }) {
             <div key={r.id} style={{ ...panelStyles.card, borderLeft: `3px solid ${severityColor(sev)}` }}>
               <div style={panelStyles.cardTop}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ fontSize: 15 }}>{typeIcon(r.type)}</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.text }}>{r.type}</span>
+                  <span style={{ fontSize: 17 }}>{typeIcon(r.type)}</span>
+                  <span style={{ fontSize: 14, fontWeight: 800, color: COLORS.text }}>{r.type}</span>
                 </div>
                 <span style={{
-                  fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20,
-                  background: severityColor(sev) + "18",
+                  fontSize: 12, fontWeight: 700, padding: "5px 13px", borderRadius: 20,
+                  background: severityColor(sev) + "15",
                   color: severityColor(sev),
-                  border: `1px solid ${severityColor(sev)}44`,
-                  letterSpacing: 0.5,
+                  border: `1px solid ${severityColor(sev)}40`,
+                  letterSpacing: 0.3,
                 }}>
                   {severityIcon(sev)} {sev} · {r.score}pts
                 </span>
               </div>
-              {/* Show place name in report panel */}
+
+              {/* Place name */}
               {r.placeName && (
-                <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 5 }}>
-                  <span style={{ fontSize: 11 }}>📍</span>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.accent }}>{r.placeName}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, padding: "5px 10px", background: COLORS.accentSoft, borderRadius: 8, border: `1px solid ${COLORS.accent}20` }}>
+                  <span style={{ fontSize: 12 }}>📍</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: COLORS.accent }}>{r.placeName}</span>
                 </div>
               )}
-              <p style={{ margin: "6px 0 6px", fontSize: 13, color: COLORS.textDim, lineHeight: 1.6 }}>{r.desc}</p>
-              <span style={{ fontSize: 11, color: COLORS.textMuted }}>📅 {r.date}</span>
+
+              <p style={{ margin: "8px 0 12px", fontSize: 14, color: COLORS.textDim, lineHeight: 1.7 }}>{r.desc}</p>
+
+              {/* Damage Checklist */}
+              {r.checks && r.checks.length > 0 && (
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.0, color: COLORS.textMuted, textTransform: "uppercase", marginBottom: 8 }}>
+                    ✅ Damage Checklist
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {r.checks.map((label, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 12px", background: COLORS.successSoft, borderRadius: 9, border: `1px solid ${COLORS.success}25` }}>
+                        <span style={{ fontSize: 13, color: COLORS.success, flexShrink: 0 }}>✓</span>
+                        <span style={{ fontSize: 13, color: COLORS.textDim, fontWeight: 500 }}>{label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Photo */}
+              {r.photo && (
+                <div style={{ marginBottom: 8 }}>
+                  <img
+                    src={r.photo}
+                    alt="Report photo"
+                    style={{ width: "100%", borderRadius: 14, maxHeight: 220, objectFit: "cover", border: `1px solid ${COLORS.border}`, boxShadow: "0 4px 16px rgba(15,23,42,0.10)" }}
+                  />
+                </div>
+              )}
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4, paddingTop: 12, borderTop: `1px solid ${COLORS.border}` }}>
+                <span style={{ fontSize: 12, color: COLORS.textMuted, fontWeight: 500 }}>📅 {r.date}</span>
+                {r.respondent && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 13 }}>👤</span>
+                    <span style={{ fontSize: 12, color: COLORS.textMuted }}>
+                      Reported by:{" "}
+                      <strong style={{ color: COLORS.textDim, fontWeight: 700 }}>{r.respondent}</strong>
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
           );
         })}
@@ -207,30 +248,75 @@ function SubmitForm({ pin, onClose, onSubmitted, isMobile }) {
   const fileRef = useRef();
 
   const reverseGeocode = useCallback(async (lat, lng, onDone) => {
+    const fallback = `${lat.toFixed(5)}° N, ${lng.toFixed(5)}° E`;
+
     try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`,
-        { headers: { "Accept-Language": "en", "User-Agent": "LicabInfraWatch/1.0" } }
+      // Step 1: New Places API (CORS-friendly) — nearest named POI
+      const placesRes = await fetch(
+        `https://places.googleapis.com/v1/places:searchNearby`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": GOOGLE_MAPS_API_KEY,
+            "X-Goog-FieldMask": "places.displayName,places.shortFormattedAddress",
+          },
+          body: JSON.stringify({
+            locationRestriction: {
+              circle: { center: { latitude: lat, longitude: lng }, radius: 200 },
+            },
+            rankPreference: "DISTANCE",
+            maxResultCount: 1,
+          }),
+        }
       );
-      const data = await res.json();
-      if (data && data.address) {
-        const a = data.address;
-        const road = a.road || a.pedestrian || a.footway || "";
-        const village = a.village || a.suburb || a.neighbourhood || a.hamlet || "";
-        const city = a.city || a.town || a.municipality || a.county || "";
-        const name = data.name || "";
-        if (name && name !== road) setLocationName(name + (village ? `, ${village}` : city ? `, ${city}` : ""));
-        else if (road && village) setLocationName(`${road}, ${village}`);
-        else if (road && city) setLocationName(`${road}, ${city}`);
-        else if (village && city) setLocationName(`${village}, ${city}`);
-        else if (city) setLocationName(city);
-        else setLocationName(data.display_name?.split(",").slice(0, 3).join(",").trim() || `${lat.toFixed(5)}° N, ${lng.toFixed(5)}° E`);
-      } else {
-        setLocationName(`${lat.toFixed(5)}° N, ${lng.toFixed(5)}° E`);
+      const placesData = await placesRes.json();
+      if (placesData.places?.length > 0) {
+        const top = placesData.places[0];
+        const name = top.displayName?.text || "";
+        const addr = top.shortFormattedAddress || "";
+        const area = addr ? addr.split(",")[0].trim() : "";
+        if (name) {
+          setLocationName(area ? `Near ${name}, ${area}` : `Near ${name}`);
+          onDone && onDone();
+          return;
+        }
       }
-    } catch {
-      setLocationName(`${lat.toFixed(5)}° N, ${lng.toFixed(5)}° E`);
-    }
+    } catch { /* fall through */ }
+
+    try {
+      // Step 2: Geocoding REST API fallback
+      const geoRes = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${GOOGLE_MAPS_API_KEY}&language=en`
+      );
+      const geoData = await geoRes.json();
+      if (geoData.status === "OK" && geoData.results?.length > 0) {
+        const result =
+          geoData.results.find((r) =>
+            r.types?.some((t) =>
+              ["establishment", "point_of_interest", "premise", "school"].includes(t)
+            )
+          ) || geoData.results[0];
+        const comps = result.address_components || [];
+        const premise = comps.find((c) => c.types.includes("premise"))?.long_name || "";
+        const route = comps.find((c) => c.types.includes("route"))?.long_name || "";
+        const sublocal =
+          comps.find(
+            (c) => c.types.includes("sublocality_level_1") || c.types.includes("sublocality")
+          )?.long_name || "";
+        const locality = comps.find((c) => c.types.includes("locality"))?.long_name || "";
+        const label = premise
+          ? `${premise}, ${sublocal || locality}`
+          : route
+            ? `${route}, ${sublocal || locality}`
+            : result.formatted_address?.split(",").slice(0, 2).join(",").trim() || fallback;
+        setLocationName(label);
+        onDone && onDone();
+        return;
+      }
+    } catch { /* fall through */ }
+
+    setLocationName(fallback);
     onDone && onDone();
   }, []);
 
@@ -268,7 +354,6 @@ function SubmitForm({ pin, onClose, onSubmitted, isMobile }) {
   const severity = type && score > 0 ? getSeverity(score) : null;
   const toggle = (id) => setChecks((p) => ({ ...p, [id]: !p[id] }));
 
-  // ── Supabase submit ──────────────────────────────────────────────────────
   const handleSubmit = async () => {
     if (!type || !desc.trim()) return;
     setSubmitting(true);
@@ -277,7 +362,6 @@ function SubmitForm({ pin, onClose, onSubmitted, isMobile }) {
     try {
       let photo_url = null;
 
-      // Upload photo to Supabase Storage if one was selected
       const file = fileRef.current?.files?.[0];
       if (file) {
         const ext = file.name.split(".").pop();
@@ -296,7 +380,10 @@ function SubmitForm({ pin, onClose, onSubmitted, isMobile }) {
         photo_url = urlData.publicUrl;
       }
 
-      // Insert report — status defaults to 'pending' via DB default
+      const checkedLabels = items
+        .filter((item) => checks[item.id])
+        .map((item) => item.label);
+
       const { error: insertError } = await supabase.from("reports").insert({
         lat: activePin.lat,
         lng: activePin.lng,
@@ -306,7 +393,7 @@ function SubmitForm({ pin, onClose, onSubmitted, isMobile }) {
         place_name: locationName || null,
         description: desc,
         respondent: respondentName || null,
-        checks,
+        checks: checkedLabels,
         photo_url,
       });
 
@@ -342,7 +429,7 @@ function SubmitForm({ pin, onClose, onSubmitted, isMobile }) {
       <div style={panelStyles.header}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontSize: 16 }}>📍</span>
-          <span style={{ fontWeight: 700, fontSize: 12, letterSpacing: 1.2, color: COLORS.textMuted, textTransform: "uppercase" }}>New Report</span>
+          <span style={{ fontWeight: 800, fontSize: 14, letterSpacing: 0.5, color: COLORS.text }}>New Damage Report</span>
         </div>
         <button onClick={onClose} style={panelStyles.closeBtn} aria-label="Close">
           <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
@@ -373,12 +460,12 @@ function SubmitForm({ pin, onClose, onSubmitted, isMobile }) {
               onClick={handleGetCurrentLocation}
               disabled={geoLoading}
               style={{
-                marginTop: 10, padding: "8px 12px", borderRadius: 8,
-                border: `1px solid ${COLORS.accentLight}55`,
-                background: geoLoading ? COLORS.surfaceMid : COLORS.accent + "10",
+                marginTop: 12, padding: "11px 16px", borderRadius: 12,
+                border: `1.5px solid ${COLORS.accent}30`,
+                background: geoLoading ? COLORS.surfaceMid : COLORS.accentSoft,
                 color: geoLoading ? COLORS.textMuted : COLORS.accent,
-                fontSize: 12, fontWeight: 700, cursor: geoLoading ? "not-allowed" : "pointer",
-                display: "flex", alignItems: "center", gap: 6, transition: "all 0.15s",
+                fontSize: 13, fontWeight: 700, cursor: geoLoading ? "not-allowed" : "pointer",
+                display: "flex", alignItems: "center", gap: 7, transition: "all 0.15s",
                 width: "100%", justifyContent: "center",
               }}
             >
@@ -395,7 +482,7 @@ function SubmitForm({ pin, onClose, onSubmitted, isMobile }) {
         <div style={panelStyles.section}>
           <label style={panelStyles.label}>
             Respondent Name
-            <span style={{ color: COLORS.textMuted, fontSize: 9, marginLeft: 6, fontWeight: 400 }}>(OPTIONAL)</span>
+            <span style={{ color: COLORS.textMuted, fontSize: 10, marginLeft: 6, fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>(optional)</span>
           </label>
           <input
             type="text"
@@ -413,15 +500,15 @@ function SubmitForm({ pin, onClose, onSubmitted, isMobile }) {
             {INFRA_TYPES.map((t) => (
               <button key={t} onClick={() => { setType(t); setChecks({}); }}
                 style={{
-                  flex: 1, padding: "9px 4px", borderRadius: 10, fontSize: 11, fontWeight: 700,
-                  cursor: "pointer", letterSpacing: 0.3, transition: "all 0.15s",
-                  background: type === t ? COLORS.accent : COLORS.surfaceHigh,
-                  border: `1.5px solid ${type === t ? COLORS.accentLight : COLORS.border}`,
+                  flex: 1, padding: "12px 6px", borderRadius: 14, fontSize: 12, fontWeight: 700,
+                  cursor: "pointer", letterSpacing: 0.2, transition: "all 0.2s",
+                  background: type === t ? COLORS.accent : COLORS.surface,
+                  border: `2px solid ${type === t ? COLORS.accent : COLORS.border}`,
                   color: type === t ? "white" : COLORS.textDim,
-                  display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
-                  boxShadow: type === t ? `0 2px 10px ${COLORS.accentGlow}` : "none",
+                  display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
+                  boxShadow: type === t ? `0 4px 16px ${COLORS.accentGlow}` : "0 1px 4px rgba(15,23,42,0.06)",
                 }}>
-                <span style={{ fontSize: 18 }}>{typeIcon(t)}</span>
+                <span style={{ fontSize: 22 }}>{typeIcon(t)}</span>
                 <span>{t}</span>
               </button>
             ))}
@@ -435,22 +522,22 @@ function SubmitForm({ pin, onClose, onSubmitted, isMobile }) {
             <div style={{ background: COLORS.surfaceHigh, borderRadius: 10, border: `1px solid ${COLORS.border}`, overflow: "hidden" }}>
               {items.map((item, idx) => (
                 <label key={item.id} style={{
-                  display: "flex", alignItems: "center", gap: 10, padding: "9px 12px",
-                  cursor: "pointer", background: checks[item.id] ? COLORS.accent + "0d" : "transparent",
+                  display: "flex", alignItems: "center", gap: 12, padding: "11px 14px",
+                  cursor: "pointer", background: checks[item.id] ? COLORS.accent + "0f" : "transparent",
                   borderBottom: idx < items.length - 1 ? `1px solid ${COLORS.border}` : "none",
-                  transition: "background 0.1s",
+                  transition: "background 0.15s",
                 }}>
                   <input type="checkbox" checked={!!checks[item.id]} onChange={() => toggle(item.id)}
-                    style={{ accentColor: COLORS.accent, width: 15, height: 15, flexShrink: 0 }} />
-                  <span style={{ fontSize: 12, color: checks[item.id] ? COLORS.text : COLORS.textDim, flex: 1 }}>{item.label}</span>
-                  <span style={{ fontSize: 11, color: COLORS.textMuted, fontWeight: 700, background: COLORS.border, padding: "1px 7px", borderRadius: 10 }}>+{item.weight}</span>
+                    style={{ accentColor: COLORS.accent, width: 17, height: 17, flexShrink: 0, cursor: "pointer" }} />
+                  <span style={{ fontSize: 13, color: checks[item.id] ? COLORS.text : COLORS.textDim, flex: 1, fontWeight: checks[item.id] ? 600 : 400 }}>{item.label}</span>
+                  <span style={{ fontSize: 11, color: checks[item.id] ? COLORS.accent : COLORS.textMuted, fontWeight: 700, background: checks[item.id] ? COLORS.accentSoft : COLORS.border, padding: "2px 8px", borderRadius: 10, border: checks[item.id] ? `1px solid ${COLORS.accent}30` : "none" }}>+{item.weight}</span>
                 </label>
               ))}
             </div>
             {score > 0 && (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8, padding: "8px 12px", background: COLORS.surfaceMid, borderRadius: 8, border: `1px solid ${COLORS.border}` }}>
-                <span style={{ fontSize: 12, color: COLORS.textDim }}>Score: <strong style={{ color: COLORS.text }}>{score}</strong></span>
-                <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20, background: severityColor(severity) + "18", color: severityColor(severity), border: `1px solid ${severityColor(severity)}44` }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, padding: "12px 16px", background: severityColor(severity) + "0e", borderRadius: 12, border: `1px solid ${severityColor(severity)}30` }}>
+                <span style={{ fontSize: 13, color: COLORS.textDim, fontWeight: 500 }}>Damage Score: <strong style={{ color: COLORS.text, fontSize: 15 }}>{score}</strong></span>
+                <span style={{ fontSize: 12, fontWeight: 700, padding: "5px 14px", borderRadius: 20, background: severityColor(severity) + "18", color: severityColor(severity), border: `1px solid ${severityColor(severity)}44` }}>
                   {severityIcon(severity)} {severity} Severity
                 </span>
               </div>
@@ -463,46 +550,45 @@ function SubmitForm({ pin, onClose, onSubmitted, isMobile }) {
           <label style={panelStyles.label}>Description <span style={{ color: COLORS.danger }}>*</span></label>
           <textarea value={desc} onChange={(e) => setDesc(e.target.value)}
             placeholder="Describe the damage in detail…"
-            style={{ ...panelStyles.input, height: 88, resize: "vertical", fontFamily: "inherit", lineHeight: 1.5 }} />
+            style={{ ...panelStyles.input, height: 100, resize: "vertical", fontFamily: "inherit", lineHeight: 1.6 }} />
         </div>
 
         {/* Photo */}
         <div style={panelStyles.section}>
           <label style={panelStyles.label}>Photo (optional)</label>
           <div onClick={() => fileRef.current.click()} style={{
-            border: `1.5px dashed ${COLORS.border}`, borderRadius: 10, padding: "14px",
+            border: `2px dashed ${COLORS.border}`, borderRadius: 14, padding: "20px 16px",
             textAlign: "center", cursor: "pointer", background: COLORS.surfaceHigh,
-            transition: "border-color 0.15s",
+            transition: "all 0.2s",
           }}>
             {photoName
-              ? <span style={{ color: COLORS.accent, fontSize: 13, fontWeight: 600 }}>📷 {photoName}</span>
-              : <><div style={{ fontSize: 24, marginBottom: 4 }}>📸</div><span style={{ color: COLORS.textMuted, fontSize: 12 }}>Click to attach a photo</span></>
+              ? <span style={{ color: COLORS.accent, fontSize: 14, fontWeight: 700 }}>📷 {photoName}</span>
+              : <><div style={{ fontSize: 30, marginBottom: 6 }}>📸</div><span style={{ color: COLORS.textMuted, fontSize: 13, fontWeight: 500 }}>Click to attach a photo</span></>
             }
             <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }}
               onChange={(e) => setPhotoName(e.target.files[0]?.name || "")} />
           </div>
         </div>
 
-        {/* Error message */}
         {submitError && (
-          <div style={{ margin: "8px 20px 0", padding: "10px 14px", background: COLORS.danger + "10", border: `1px solid ${COLORS.danger}44`, borderRadius: 8, fontSize: 12, color: COLORS.danger, fontWeight: 600 }}>
-            ⚠️ {submitError}
+          <div style={{ margin: "10px 24px 0", padding: "12px 16px", background: "#fef2f2", border: `1px solid ${COLORS.danger}30`, borderRadius: 12, fontSize: 13, color: COLORS.danger, fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 16 }}>⚠️</span> {submitError}
           </div>
         )}
 
-        <div style={{ padding: isMobile ? "12px 16px 32px" : "12px 16px 20px", flexShrink: 0 }}>
+        <div style={{ padding: isMobile ? "16px 24px 36px" : "16px 24px 24px", flexShrink: 0 }}>
           <button onClick={handleSubmit} disabled={!canSubmit}
             style={{
-              width: "100%", padding: "13px", borderRadius: 11, border: "none",
-              background: canSubmit ? `linear-gradient(135deg, ${COLORS.accent}, ${COLORS.accentLight})` : COLORS.surfaceMid,
+              width: "100%", padding: "16px", borderRadius: 14, border: "none",
+              background: canSubmit ? `linear-gradient(135deg, ${COLORS.accent}, #1d4ed8)` : COLORS.surfaceMid,
               color: canSubmit ? "white" : COLORS.textMuted,
-              fontWeight: 700, fontSize: 14, letterSpacing: 0.5,
-              boxShadow: canSubmit ? `0 4px 18px ${COLORS.accentGlow}` : "none",
+              fontWeight: 800, fontSize: 15, letterSpacing: 0.4,
+              boxShadow: canSubmit ? `0 6px 24px ${COLORS.accentGlow}` : "none",
               transition: "all 0.2s", cursor: canSubmit ? "pointer" : "not-allowed",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 9,
             }}>
             {submitting
-              ? <><span style={{ animation: "spin 0.8s linear infinite", display: "inline-block" }}>⏳</span> Submitting…</>
+              ? <><span style={{ animation: "spin 0.8s linear infinite", display: "inline-block", fontSize: 16 }}>⏳</span> Submitting…</>
               : canSubmit ? "🚀 Submit Report" : "Complete all required fields"
             }
           </button>
@@ -541,7 +627,8 @@ function GoogleMap({ reports, pinMode, onMapClick, onPinClick, newPin, selectedG
     const { maps } = window.google;
     const map = new maps.Map(mapRef.current, {
       center: LICAB_CENTER,
-      zoom: 14,
+      zoom: LICAB_ZOOM,
+      minZoom: LICAB_ZOOM,
       styles: LIGHT_MAP_STYLES,
       disableDefaultUI: false,
       zoomControl: true,
@@ -551,12 +638,22 @@ function GoogleMap({ reports, pinMode, onMapClick, onPinClick, newPin, selectedG
       gestureHandling: "greedy",
       zoomControlOptions: { position: maps.ControlPosition.RIGHT_BOTTOM },
       fullscreenControlOptions: { position: maps.ControlPosition.RIGHT_TOP },
+      restriction: {
+        latLngBounds: {
+          north: LICAB_BOUNDS.maxLat,
+          south: LICAB_BOUNDS.minLat,
+          east: LICAB_BOUNDS.maxLng,
+          west: LICAB_BOUNDS.minLng,
+        },
+        strictBounds: true,
+      },
     });
 
     map.addListener("click", (e) => {
       if (!pinModeRef.current) return;
       const lat = e.latLng.lat();
       const lng = e.latLng.lng();
+      // Block outside Licab bounds
       if (lat < LICAB_BOUNDS.minLat || lat > LICAB_BOUNDS.maxLat ||
         lng < LICAB_BOUNDS.minLng || lng > LICAB_BOUNDS.maxLng) {
         onMapClickRef.current({ outOfBounds: true });
@@ -683,9 +780,9 @@ function StatsBar({ reports }) {
         { label: "Med", count: med, color: COLORS.pin.medium },
         { label: "Low", count: low, color: COLORS.pin.low },
       ].map(({ label, count, color }) => (
-        <div key={label} style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 20, background: color + "18", border: `1px solid ${color}33` }}>
-          <div style={{ width: 6, height: 6, borderRadius: "50%", background: color, boxShadow: `0 0 4px ${color}` }} />
-          <span style={{ fontSize: 11, color, fontWeight: 600 }}>{count} {label}</span>
+        <div key={label} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 20, background: color + "12", border: `1px solid ${color}30` }}>
+          <div style={{ width: 7, height: 7, borderRadius: "50%", background: color, boxShadow: `0 0 5px ${color}` }} />
+          <span style={{ fontSize: 12, color, fontWeight: 700 }}>{count} {label}</span>
         </div>
       ))}
     </div>
@@ -704,7 +801,7 @@ export default function App() {
     async function fetchReports() {
       const { data, error } = await supabase
         .from("reports")
-        .select("id, lat, lng, type, score, severity, place_name, description, photo_url, created_at")
+        .select("id, lat, lng, type, score, severity, place_name, description, photo_url, created_at, respondent, checks")
         .eq("status", "approved")
         .order("created_at", { ascending: false });
 
@@ -715,22 +812,36 @@ export default function App() {
       }
 
       setReports(
-        data.map((r) => ({
-          id: r.id,
-          lat: r.lat,
-          lng: r.lng,
-          type: r.type,
-          score: r.score,
-          placeName: r.place_name,
-          desc: r.description,
-          photo: r.photo_url,
-          date: r.created_at?.slice(0, 10),
-        }))
+        (data || [])
+          .filter((r) => r.lat != null && r.lng != null)
+          .map((r) => ({
+            id: r.id,
+            lat: parseFloat(r.lat),
+            lng: parseFloat(r.lng),
+            type: r.type,
+            score: r.score,
+            placeName: r.place_name,
+            desc: r.description,
+            photo: r.photo_url,
+            date: r.created_at?.slice(0, 10),
+            respondent: r.respondent,
+            checks: Array.isArray(r.checks) ? r.checks : [],
+          }))
       );
       setReportsLoading(false);
     }
 
     fetchReports();
+
+    // ✅ Realtime — map updates instantly when admin approves
+    const channel = supabase
+      .channel("public-map-reports")
+      .on("postgres_changes", { event: "*", schema: "public", table: "reports" }, () => {
+        fetchReports();
+      })
+      .subscribe();
+
+    return () => supabase.removeChannel(channel);
   }, []);
 
   const [pinMode, setPinMode] = useState(false);
@@ -787,7 +898,7 @@ export default function App() {
 
   const filteredReports = filter === "All" ? reports : reports.filter((r) => r.type === filter);
 
-  const handleMapClick = useCallback(({ lat, lng, outOfBounds }) => {
+  const handleMapClick = useCallback(({ lat, lng, outOfBounds, centerBlocked }) => {
     if (!pinMode) return;
     if (outOfBounds) { showToast("⚠️ Please pin within the Licab municipality area."); return; }
     setNewPin({ lat, lng });
@@ -812,71 +923,73 @@ export default function App() {
     <div style={{
       minHeight: "100vh", height: "100vh", width: "100vw",
       background: COLORS.bg,
-      fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif",
+      fontFamily: "'Plus Jakarta Sans', 'Segoe UI', system-ui, sans-serif",
       display: "flex", flexDirection: "column",
       color: COLORS.text, overflow: "hidden",
       position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
     }}>
       {/* Global CSS */}
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         html, body, #root { width: 100% !important; height: 100% !important; margin: 0 !important; padding: 0 !important; background: ${COLORS.bg} !important; }
         body { overflow: hidden !important; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        @keyframes slideRight { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         @keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        @keyframes fadeUp { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        ::-webkit-scrollbar { width: 4px; }
+        @keyframes slideRight { from { transform: translateX(30px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes fadeUp { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        ::-webkit-scrollbar { width: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: ${COLORS.border}; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: ${COLORS.textMuted}40; }
         button:focus-visible { outline: 2px solid ${COLORS.accentLight}; outline-offset: 2px; }
         input, textarea { box-sizing: border-box; font-family: inherit; }
+        input:focus, textarea:focus { border-color: ${COLORS.accentLight} !important; box-shadow: 0 0 0 3px ${COLORS.accentGlow} !important; outline: none; }
         button { font-family: inherit; }
       `}</style>
 
       {/* ── Header ── */}
       <header style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: isMobile ? "0 16px" : "0 24px",
-        height: isMobile ? "auto" : "60px",
-        minHeight: isMobile ? 56 : 60,
-        background: "#0f172a",
-        gap: 10, flexWrap: isMobile ? "wrap" : "nowrap",
+        padding: isMobile ? "0 16px" : "0 28px",
+        height: isMobile ? "auto" : "68px",
+        minHeight: isMobile ? 60 : 68,
+        background: "#ffffff",
+        borderBottom: `1px solid ${COLORS.border}`,
+        gap: 12, flexWrap: isMobile ? "wrap" : "nowrap",
         zIndex: 1000, flexShrink: 0,
-        paddingTop: isMobile ? 10 : 0,
-        paddingBottom: isMobile ? 10 : 0,
+        paddingTop: isMobile ? 12 : 0,
+        paddingBottom: isMobile ? 12 : 0,
+        boxShadow: "0 2px 12px rgba(15,23,42,0.06)",
       }}>
         {/* Logo */}
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{
-            background: "linear-gradient(135deg, #3b82f6, #1d4ed8)",
-            color: "white", fontWeight: 800, fontSize: 10, padding: "6px 10px",
-            borderRadius: 8, letterSpacing: 1.8,
-            border: "1px solid rgba(255,255,255,0.15)",
-          }}>LGU</div>
+            background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
+            color: "white", fontWeight: 900, fontSize: 13, padding: "7px 13px",
+            borderRadius: 10, letterSpacing: 1.5,
+            boxShadow: "0 2px 10px rgba(37,99,235,0.35)",
+          }}>CIVI<span style={{ opacity: 0.75 }}>MAP</span></div>
           <div>
-            <div style={{ fontWeight: 700, fontSize: isMobile ? 14 : 15, color: "white", lineHeight: 1.2, letterSpacing: -0.3 }}>Licab InfraWatch</div>
-            {!isMobile && <div style={{ fontSize: 10, color: "#64748b", letterSpacing: 1.4, textTransform: "uppercase", marginTop: 2 }}>Nueva Ecija · Damage Reporting</div>}
+            <div style={{ fontWeight: 800, fontSize: isMobile ? 14 : 16, color: COLORS.text, lineHeight: 1.2, letterSpacing: -0.5 }}>CIVIMAP</div>
+            {!isMobile && <div style={{ fontSize: 10, color: COLORS.textMuted, letterSpacing: 1.4, textTransform: "uppercase", marginTop: 2 }}>Licab · Damage Reporting</div>}
           </div>
         </div>
 
         {/* Controls */}
         <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 12, flexWrap: "wrap", flex: isMobile ? "1 1 100%" : "0 0 auto", justifyContent: isMobile ? "space-between" : "flex-end" }}>
-          {/* Stats */}
           {!isMobile && <StatsBar reports={filteredReports} />}
 
           {/* Filters */}
-          <div style={{ display: "flex", gap: 2, background: "rgba(255,255,255,0.07)", borderRadius: 10, padding: 3, border: "1px solid rgba(255,255,255,0.1)" }}>
+          <div style={{ display: "flex", gap: 3, background: COLORS.surfaceHigh, borderRadius: 12, padding: 4, border: `1px solid ${COLORS.border}` }}>
             {["All", ...INFRA_TYPES].map((f) => (
               <button key={f} onClick={() => setFilter(f)} style={{
-                padding: isMobile ? "5px 10px" : "5px 13px",
-                borderRadius: 7, fontSize: 11, fontWeight: 600, cursor: "pointer",
-                letterSpacing: 0.2, transition: "all 0.15s", border: "none",
-                background: filter === f ? "#3b82f6" : "transparent",
-                color: filter === f ? "white" : "#94a3b8",
-                boxShadow: filter === f ? "0 1px 6px rgba(59,130,246,0.4)" : "none",
+                padding: isMobile ? "6px 11px" : "7px 14px",
+                borderRadius: 9, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                letterSpacing: 0.2, transition: "all 0.18s", border: "none",
+                background: filter === f ? COLORS.accent : "transparent",
+                color: filter === f ? "white" : COLORS.textMuted,
+                boxShadow: filter === f ? `0 2px 8px ${COLORS.accentGlow}` : "none",
               }}>{f}</button>
             ))}
           </div>
@@ -885,14 +998,14 @@ export default function App() {
           <button
             onClick={() => { setPinMode(p => !p); setSelectedGroup(null); setShowForm(false); }}
             style={{
-              padding: isMobile ? "8px 14px" : "8px 18px",
-              borderRadius: 9, border: "none", color: "white",
-              fontWeight: 600, fontSize: isMobile ? 12 : 13, cursor: "pointer",
+              padding: isMobile ? "10px 18px" : "11px 24px",
+              borderRadius: 12, border: "none", color: "white",
+              fontWeight: 700, fontSize: isMobile ? 13 : 14, cursor: "pointer",
               letterSpacing: 0.3, transition: "all 0.2s", whiteSpace: "nowrap",
-              background: pinMode ? "#dc2626" : "linear-gradient(135deg, #3b82f6, #1d4ed8)",
-              boxShadow: pinMode ? "0 4px 14px rgba(220,38,38,0.4)" : "0 4px 14px rgba(29,78,216,0.35)",
+              background: pinMode ? "linear-gradient(135deg, #dc2626, #b91c1c)" : "linear-gradient(135deg, #3b82f6, #2563eb)",
+              boxShadow: pinMode ? "0 4px 18px rgba(220,38,38,0.4)" : `0 4px 18px ${COLORS.accentGlow}`,
             }}>
-            {pinMode ? "✕ Cancel" : (isMobile ? "+ Report" : "+ Report Damage")}
+            {pinMode ? "✕ Cancel" : (isMobile ? "＋ Report" : "＋ Report Damage")}
           </button>
         </div>
       </header>
@@ -901,14 +1014,14 @@ export default function App() {
       <div style={{ flex: 1, display: "flex", overflow: "hidden", position: "relative" }}>
         {/* Map */}
         <div style={{ flex: 1, position: "relative" }}>
-          {/* Loading overlay */}
           {reportsLoading && (
             <div style={{
               position: "absolute", top: 16, left: "50%", transform: "translateX(-50%)",
-              background: "#0f172a", color: "white", padding: "8px 18px",
-              borderRadius: 20, fontSize: 12, fontWeight: 600, zIndex: 900,
+              background: COLORS.surface, color: COLORS.text, padding: "10px 20px",
+              borderRadius: 24, fontSize: 13, fontWeight: 600, zIndex: 900,
               display: "flex", alignItems: "center", gap: 8,
-              boxShadow: "0 4px 20px rgba(0,0,0,0.2)",
+              boxShadow: "0 4px 20px rgba(15,23,42,0.14)",
+              border: `1px solid ${COLORS.border}`,
             }}>
               <span style={{ animation: "spin 0.8s linear infinite", display: "inline-block" }}>⏳</span>
               Loading reports…
@@ -928,12 +1041,12 @@ export default function App() {
           {pinMode && (
             <div style={{
               position: "absolute", top: 16, left: "50%", transform: "translateX(-50%)",
-              background: "#0f172a", color: "white", padding: "10px 16px 10px 20px",
-              borderRadius: 24, fontSize: 13, fontWeight: 600, zIndex: 900,
-              boxShadow: "0 8px 32px rgba(0,0,0,0.25)", whiteSpace: "nowrap",
+              background: COLORS.accent, color: "white", padding: "12px 20px 12px 24px",
+              borderRadius: 28, fontSize: 13, fontWeight: 700, zIndex: 900,
+              boxShadow: `0 8px 32px ${COLORS.accentGlow}`, whiteSpace: "nowrap",
               animation: "fadeUp 0.3s ease",
               display: "flex", alignItems: "center", gap: 10,
-              border: "1px solid rgba(59,130,246,0.4)",
+              border: "1px solid rgba(255,255,255,0.2)",
             }}>
               <span style={{ animation: "spin 2s linear infinite", display: "inline-block", fontSize: 16, pointerEvents: "none" }}>📍</span>
               <span style={{ pointerEvents: "none" }}>Click the map to pin the damage location</span>
@@ -942,13 +1055,13 @@ export default function App() {
                 onClick={handleUseCurrentLocation}
                 disabled={pinGeoLoading}
                 style={{
-                  background: pinGeoLoading ? "rgba(59,130,246,0.3)" : "rgba(59,130,246,0.85)",
-                  color: "white", border: "none", borderRadius: 14,
-                  padding: "5px 12px", fontSize: 11, fontWeight: 700,
+                  background: pinGeoLoading ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.95)",
+                  color: pinGeoLoading ? "rgba(255,255,255,0.6)" : COLORS.accent, border: "none", borderRadius: 16,
+                  padding: "7px 16px", fontSize: 12, fontWeight: 700,
                   cursor: pinGeoLoading ? "not-allowed" : "pointer",
-                  display: "flex", alignItems: "center", gap: 5,
+                  display: "flex", alignItems: "center", gap: 6,
                   letterSpacing: 0.3, whiteSpace: "nowrap",
-                  transition: "background 0.15s",
+                  transition: "all 0.15s",
                   flexShrink: 0,
                 }}>
                 {pinGeoLoading
@@ -962,10 +1075,11 @@ export default function App() {
           {/* Mobile: Show panel toggle */}
           {isMobile && sideOpen && (
             <button onClick={() => setShowPanel(p => !p)} style={{
-              position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)",
+              position: "absolute", bottom: 22, left: "50%", transform: "translateX(-50%)",
               background: COLORS.accent, color: "white", border: "none",
-              padding: "8px 22px", borderRadius: 20, fontSize: 12, fontWeight: 700,
-              cursor: "pointer", zIndex: 900, boxShadow: `0 4px 16px ${COLORS.accentGlow}`,
+              padding: "12px 28px", borderRadius: 24, fontSize: 13, fontWeight: 700,
+              cursor: "pointer", zIndex: 900, boxShadow: `0 6px 20px ${COLORS.accentGlow}`,
+              letterSpacing: 0.3,
             }}>
               {showPanel ? "⬇ Hide Details" : "⬆ Show Details"}
             </button>
@@ -973,11 +1087,12 @@ export default function App() {
 
           {/* Map badge */}
           <div style={{
-            position: "absolute", bottom: 6, left: 8,
-            background: "rgba(255,255,255,0.85)", color: COLORS.textMuted,
-            fontSize: 10, padding: "3px 8px", borderRadius: 6,
+            position: "absolute", bottom: 10, left: 12,
+            background: "rgba(255,255,255,0.92)", color: COLORS.textMuted,
+            fontSize: 10, padding: "5px 10px", borderRadius: 8,
             pointerEvents: "none", zIndex: 900, border: `1px solid ${COLORS.border}`,
-            backdropFilter: "blur(4px)",
+            backdropFilter: "blur(8px)", fontWeight: 600,
+            boxShadow: "0 2px 8px rgba(15,23,42,0.08)",
           }}>
             🗺️ Google Maps
           </div>
@@ -1008,26 +1123,28 @@ export default function App() {
       {/* ── Legend (desktop bottom bar) ── */}
       {!isMobile && (
         <div style={{
-          display: "flex", alignItems: "center", gap: 18,
-          padding: "8px 24px", background: "#0f172a",
+          display: "flex", alignItems: "center", gap: 16,
+          padding: "10px 28px", background: COLORS.surface,
+          borderTop: `1px solid ${COLORS.border}`,
           flexWrap: "wrap", flexShrink: 0,
+          boxShadow: "0 -2px 12px rgba(15,23,42,0.04)",
         }}>
-          <span style={{ fontSize: 10, color: "#475569", fontWeight: 700, letterSpacing: 1.4, textTransform: "uppercase" }}>Legend</span>
+          <span style={{ fontSize: 10, color: COLORS.textMuted, fontWeight: 700, letterSpacing: 1.4, textTransform: "uppercase" }}>Legend</span>
           {["High", "Medium", "Low"].map((s) => (
-            <div key={s} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-              <div style={{ width: 8, height: 8, borderRadius: "50%", background: severityColor(s), boxShadow: `0 0 6px ${severityColor(s)}88` }} />
-              <span style={{ fontSize: 11, color: "#64748b" }}>{s} Severity</span>
+            <div key={s} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 20, background: severityColor(s) + "10", border: `1px solid ${severityColor(s)}30` }}>
+              <div style={{ width: 7, height: 7, borderRadius: "50%", background: severityColor(s), boxShadow: `0 0 5px ${severityColor(s)}88` }} />
+              <span style={{ fontSize: 11, color: severityColor(s), fontWeight: 600 }}>{s}</span>
             </div>
           ))}
-          <div style={{ width: 1, height: 14, background: "#1e293b" }} />
+          <div style={{ width: 1, height: 14, background: COLORS.border }} />
           {INFRA_TYPES.map(t => (
             <div key={t} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-              <span style={{ fontSize: 12 }}>{typeIcon(t)}</span>
-              <span style={{ fontSize: 11, color: "#64748b" }}>{t}</span>
+              <span style={{ fontSize: 13 }}>{typeIcon(t)}</span>
+              <span style={{ fontSize: 11, color: COLORS.textDim, fontWeight: 500 }}>{t}</span>
             </div>
           ))}
-          <div style={{ marginLeft: "auto", fontSize: 11, color: "#475569" }}>
-            <span style={{ color: "#3b82f6", fontWeight: 700 }}>{reports.length}</span> approved reports · Licab, Nueva Ecija
+          <div style={{ marginLeft: "auto", fontSize: 11, color: COLORS.textMuted }}>
+            <span style={{ color: COLORS.accent, fontWeight: 700 }}>{reports.length}</span> approved reports · Licab, Nueva Ecija PH
           </div>
         </div>
       )}
@@ -1035,11 +1152,12 @@ export default function App() {
       {/* ── Toast ── */}
       {toast && (
         <div style={{
-          position: "fixed", bottom: 70, left: "50%", transform: "translateX(-50%)",
-          background: COLORS.surface, border: `1px solid ${COLORS.border}`,
-          color: COLORS.text, padding: "10px 24px", borderRadius: 24,
-          fontSize: 13, fontWeight: 600, boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
-          zIndex: 9999, animation: "fadeUp 0.2s ease", whiteSpace: "nowrap",
+          position: "fixed", bottom: 80, left: "50%", transform: "translateX(-50%)",
+          background: COLORS.text, border: "none",
+          color: "#ffffff", padding: "12px 28px", borderRadius: 28,
+          fontSize: 13, fontWeight: 600, boxShadow: "0 8px 32px rgba(15,23,42,0.25)",
+          zIndex: 9999, animation: "fadeUp 0.25s ease", whiteSpace: "nowrap",
+          letterSpacing: 0.2,
         }}>
           {toast}
         </div>
@@ -1055,61 +1173,63 @@ const getPanelWrapStyle = (isMobile) => ({
   right: isMobile ? 0 : 0,
   top: isMobile ? "auto" : 0,
   left: isMobile ? 0 : "auto",
-  width: isMobile ? "100%" : 380,
-  minWidth: isMobile ? "100%" : 340,
-  maxHeight: isMobile ? "88vh" : "100%",
+  width: isMobile ? "100%" : 440,
+  minWidth: isMobile ? "100%" : 400,
+  maxHeight: isMobile ? "90vh" : "100%",
   background: COLORS.surface,
   borderLeft: isMobile ? "none" : `1px solid ${COLORS.border}`,
   borderTop: isMobile ? `1px solid ${COLORS.border}` : "none",
-  borderRadius: isMobile ? "24px 24px 0 0" : "0",
+  borderRadius: isMobile ? "28px 28px 0 0" : "0",
   display: "flex",
   flexDirection: "column",
-  boxShadow: isMobile ? "0 -4px 24px rgba(0,0,0,0.1)" : "-4px 0 24px rgba(0,0,0,0.06)",
+  boxShadow: isMobile ? "0 -8px 40px rgba(15,23,42,0.13)" : "-8px 0 40px rgba(15,23,42,0.08)",
   zIndex: 500,
-  animation: isMobile ? "slideUp 0.25s ease-out" : "slideRight 0.25s ease-out",
+  animation: isMobile ? "slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1)" : "slideRight 0.28s cubic-bezier(0.34,1.56,0.64,1)",
 });
 
 const panelStyles = {
   wrap: {
-    width: 380,
-    minWidth: 340,
+    width: 440,
+    minWidth: 400,
     background: COLORS.surface,
     borderLeft: `1px solid ${COLORS.border}`,
     display: "flex",
     flexDirection: "column",
     height: "100%",
-    boxShadow: "-4px 0 24px rgba(0,0,0,0.06)",
+    boxShadow: "-8px 0 40px rgba(15,23,42,0.08)",
   },
   header: {
     display: "flex", alignItems: "center", justifyContent: "space-between",
-    padding: "16px 20px", borderBottom: `1px solid ${COLORS.border}`, flexShrink: 0,
-    background: COLORS.surface,
+    padding: "20px 24px", borderBottom: `1px solid ${COLORS.border}`, flexShrink: 0,
+    background: "linear-gradient(135deg, #f7f9fd 0%, #ffffff 100%)",
   },
   closeBtn: {
-    background: COLORS.surfaceHigh, border: `1px solid ${COLORS.border}`,
-    color: COLORS.textMuted, cursor: "pointer", padding: "7px", borderRadius: 8,
+    background: COLORS.surfaceHigh, border: `1.5px solid ${COLORS.border}`,
+    color: COLORS.textMuted, cursor: "pointer", padding: "9px", borderRadius: 10,
     display: "flex", alignItems: "center", justifyContent: "center",
     transition: "all 0.15s",
+    width: 36, height: 36,
   },
   card: {
-    padding: "16px 20px", borderBottom: `1px solid ${COLORS.border}`,
+    padding: "20px 24px", borderBottom: `1px solid ${COLORS.border}`,
     transition: "background 0.15s",
   },
   cardTop: {
-    display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8,
+    display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10,
   },
-  section: { padding: "14px 20px 0" },
+  section: { padding: "18px 24px 0" },
   label: {
-    display: "block", fontSize: 10, fontWeight: 700, letterSpacing: 1.4,
-    color: COLORS.textMuted, marginBottom: 8, textTransform: "uppercase",
+    display: "block", fontSize: 11, fontWeight: 700, letterSpacing: 1.2,
+    color: COLORS.textMuted, marginBottom: 10, textTransform: "uppercase",
   },
   input: {
     width: "100%", background: COLORS.surfaceHigh, border: `1.5px solid ${COLORS.border}`,
-    borderRadius: 10, color: COLORS.text, padding: "10px 14px",
-    fontSize: 13, outline: "none", transition: "border-color 0.15s",
+    borderRadius: 12, color: COLORS.text, padding: "13px 16px",
+    fontSize: 14, outline: "none", transition: "border-color 0.2s, box-shadow 0.2s",
+    boxSizing: "border-box",
   },
   infoBox: {
     background: COLORS.surfaceHigh, border: `1.5px solid ${COLORS.border}`,
-    borderRadius: 12, padding: "14px 16px",
+    borderRadius: 14, padding: "16px 18px",
   },
 };
